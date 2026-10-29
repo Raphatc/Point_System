@@ -1,0 +1,12 @@
+node_modules/
+.vite/
+dist/
+/target/
+.DS_Store
+opencode.json
+.env
+.env.*
+
+tauri.conf.local.json
+
+*.db
