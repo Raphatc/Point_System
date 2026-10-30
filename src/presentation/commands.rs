@@ -1,5 +1,10 @@
+use std::path::PathBuf;
+use std::time::Duration;
+
+use rusqlite::backup::Backup;
 use rusqlite::{Result, params};
-use tauri::{State, command};
+use tauri::{AppHandle, Manager, State, command};
+use tauri::path::BaseDirectory;
 
 use crate::infrastructure::db::AppState;
 use crate::domain::{AppError, DashboardData, ExpiringProduct, MonthlyRevenue, Product, ProductInput};
@@ -190,4 +195,82 @@ pub fn list_expiring_products(state: State<AppState>) -> Result<Vec<ExpiringProd
         expiring.push(item.map_err(|err| err.to_string())?);
     }
     Ok(expiring)
+}
+
+fn database_file_path(app: &AppHandle) -> Result<PathBuf, AppError> {
+    Ok(app
+        .path()
+        .resolve("distribuidora.db", BaseDirectory::AppLocalData)
+        .map_err(|err| err.to_string())?)
+}
+
+fn database_backup_dir(app: &AppHandle) -> Result<PathBuf, AppError> {
+    Ok(app
+        .path()
+        .resolve("backups", BaseDirectory::AppLocalData)
+        .map_err(|err| err.to_string())?)
+}
+
+#[command]
+pub fn create_backup(app: AppHandle) -> Result<String, AppError> {
+    let db_path = database_file_path(&app)?;
+    let backup_dir = database_backup_dir(&app)?;
+    std::fs::create_dir_all(&backup_dir).map_err(|err| err.to_string())?;
+
+    let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let backup_path = backup_dir.join(format!("distribuidora-backup-{timestamp}.db"));
+    let source = rusqlite::Connection::open(&db_path).map_err(|err| err.to_string())?;
+    let mut destination = rusqlite::Connection::open(&backup_path).map_err(|err| err.to_string())?;
+    let backup = Backup::new(&source, &mut destination).map_err(|err| err.to_string())?;
+    backup
+        .run_to_completion(5, Duration::from_millis(250), None)
+        .map_err(|err| err.to_string())?;
+
+    Ok(backup_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("distribuidora.db")
+        .to_string())
+}
+
+#[command]
+pub fn list_backups(app: AppHandle) -> Result<Vec<String>, AppError> {
+    let backup_dir = database_backup_dir(&app)?;
+    let mut backups = Vec::new();
+    let entries = std::fs::read_dir(&backup_dir).map_err(|err| err.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|err| err.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+            backups.push(name.to_string());
+        }
+    }
+    backups.sort();
+    Ok(backups)
+}
+
+#[command]
+pub fn restore_backup(app: AppHandle, file_name: String) -> Result<(), AppError> {
+    let file_name = file_name.trim();
+    if file_name.is_empty() || file_name.contains('/') || file_name.contains('\\') {
+        return Err(AppError::new("INVALID_BACKUP_NAME", "Nome de backup inválido."));
+    }
+    let backup_dir = database_backup_dir(&app)?;
+    let source_path = backup_dir.join(file_name);
+    if !source_path.is_file() {
+        return Err(AppError::new("BACKUP_NOT_FOUND", "Backup não encontrado."));
+    }
+
+    let source = rusqlite::Connection::open(&source_path).map_err(|err| err.to_string())?;
+    let db_path = database_file_path(&app)?;
+    let mut destination = rusqlite::Connection::open(&db_path).map_err(|err| err.to_string())?;
+    let backup = Backup::new(&source, &mut destination).map_err(|err| err.to_string())?;
+    backup
+        .run_to_completion(5, Duration::from_millis(250), None)
+        .map_err(|err| err.to_string())?;
+
+    Ok(())
 }

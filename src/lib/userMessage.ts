@@ -1,4 +1,4 @@
-const knownErrors = [
+const knownErrors: Array<[RegExp, string]> = [
   [
     /Estoque insuficiente/i,
     'A quantidade informada supera o estoque disponível. Reduza a quantidade ou registre uma entrada.',
@@ -29,11 +29,13 @@ const knownErrors = [
   ],
 ]
 
-export function userMessage(error) {
+export function userMessage(error: unknown): string {
   const isObject = error !== null && typeof error === 'object'
   const rawMessage =
-    isObject && typeof error.message === 'string' ? error.message : String(error ?? '')
-  const message = String(rawMessage ?? '')
+    isObject && typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : String(error ?? '')
+  const message = String(rawMessage)
     .replace(/^(Error|TypeError):\s*/i, '')
     .trim()
 

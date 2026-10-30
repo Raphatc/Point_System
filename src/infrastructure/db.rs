@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::{Connection, Result};
@@ -14,8 +15,8 @@ impl AppState {
     }
 }
 
-pub fn connect() -> Result<Connection> {
-    Connection::open("./distribuidora.db")
+pub fn connect(path: &Path) -> Result<Connection> {
+    Connection::open(path)
 }
 
 pub fn initialize_db(conn: &Connection) -> Result<()> {
@@ -132,6 +133,7 @@ pub fn initialize_db(conn: &Connection) -> Result<()> {
         )",
         (),
     )?;
+    ensure_column(conn, "cash_sessions", "operator", "TEXT NOT NULL DEFAULT 'Operador'")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS cash_movements (

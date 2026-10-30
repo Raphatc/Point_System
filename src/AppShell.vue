@@ -7,6 +7,7 @@ import CashModule from './components/cash/CashModule.vue'
 import FinanceModule from './components/finance/FinanceModule.vue'
 import SupportCatalog from './components/catalog/SupportCatalog.vue'
 import DashboardPanel from './components/finance/DashboardPanel.vue'
+import BackupPanel from './components/backup/BackupPanel.vue'
 
 const activeView = ref('cash')
 const supportCatalog = ref('products')
@@ -15,7 +16,7 @@ const productSearch = ref('')
 const clientSearch = ref('')
 
 const version = ref('2026')
-const operator = 'OPERADOR LOCAL'
+const operator = ref('Operador')
 const buildStamp = __APP_BUILD__
 
 const navigation = [
@@ -31,7 +32,9 @@ const supportNavigation = [
 
 const financeNavigation = [{ id: 'receivables', label: 'Recebíveis', mark: '05', view: 'finance' }]
 
-const menuItems = [...navigation, ...supportNavigation, ...financeNavigation]
+const backupNavigation = [{ id: 'backup', label: 'Backup', mark: '06', view: 'backup' }]
+
+const menuItems = [...navigation, ...supportNavigation, ...financeNavigation, ...backupNavigation]
 
 const topbar = computed(() => {
   switch (activeView.value) {
@@ -41,6 +44,8 @@ const topbar = computed(() => {
       return { eyebrow: 'Operação', label: 'Financeiro' }
     case 'support':
       return { eyebrow: 'Cadastros', label: 'Cadastros auxiliares' }
+    case 'backup':
+      return { eyebrow: 'Dados', label: 'Backup do banco' }
     default:
       return { eyebrow: 'Operação', label: 'Painel' }
   }
@@ -284,6 +289,11 @@ onBeforeUnmount(() => {
           v-else-if="activeView === 'support'"
           key="support"
           v-model:selected-catalog="supportCatalog"
+        />
+        <BackupPanel
+          v-else-if="activeView === 'backup'"
+          key="backup"
+          @navigate="handleNavigation"
         />
         <DashboardPanel v-else key="dashboard" @navigate="handleNavigation" />
       </Transition>

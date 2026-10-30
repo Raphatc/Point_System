@@ -2,22 +2,23 @@ import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { userMessage } from '../lib/userMessage'
 import { formatCurrency } from '../lib/format'
+import type { Receivable } from '../types'
 
 export const useReceivablesStore = defineStore('receivables', {
   state: () => ({
-    receivables: [],
-    payments: {},
-    busyId: null,
+    receivables: [] as Receivable[],
+    payments: {} as Record<string, { amount: number; method: string }>,
+    busyId: null as string | number | null,
     error: '',
     message: '',
     loading: true,
   }),
   actions: {
-    async load() {
+    async load(): Promise<void> {
       this.loading = true
       this.error = ''
       try {
-        this.receivables = await invoke('list_receivables')
+        this.receivables = await invoke<Receivable[]>('list_receivables')
         for (const item of this.receivables) {
           for (const installment of item.installments) {
             const key = installment.id ?? `legacy-${item.sale_id}`
@@ -30,7 +31,10 @@ export const useReceivablesStore = defineStore('receivables', {
         this.loading = false
       }
     },
-    async receive(item, installment) {
+    async receive(
+      item: Receivable,
+      installment: { id: number | null; installment_number: number; balance: number },
+    ): Promise<number> {
       try {
         this.error = ''
         const key = installment.id ?? `legacy-${item.sale_id}`
@@ -39,7 +43,7 @@ export const useReceivablesStore = defineStore('receivables', {
           amount: installment.balance / 100,
           method: 'dinheiro',
         }
-        const balance = await invoke('receive_receivable_payment', {
+        const balance = await invoke<number>('receive_receivable_payment', {
           saleId: item.sale_id,
           installmentId: installment.id,
           amount: Math.round(Number(payment.amount) * 100),
@@ -55,8 +59,10 @@ export const useReceivablesStore = defineStore('receivables', {
           this.payments[key] = { ...payment, amount: balance / 100 }
         }
         await this.load()
+        return balance
       } catch (cause) {
         this.error = userMessage(cause)
+        return 0
       } finally {
         this.busyId = null
       }

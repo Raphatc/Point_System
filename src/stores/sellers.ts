@@ -1,31 +1,32 @@
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { userMessage } from '../lib/userMessage'
+import type { Seller } from '../types'
 
-export const useClientsStore = defineStore('clients', {
+export const useSellersStore = defineStore('sellers', {
   state: () => ({
-    clients: [],
+    sellers: [] as Seller[],
     loading: false,
     error: '',
     message: '',
   }),
   actions: {
-    async load() {
+    async load(): Promise<void> {
       this.loading = true
       this.error = ''
       try {
-        this.clients = await invoke('list_clients')
+        this.sellers = await invoke<Seller[]>('list_sellers')
       } catch (cause) {
         this.error = userMessage(cause)
       } finally {
         this.loading = false
       }
     },
-    async createClient(payload) {
+    async createSeller(payload: { name: string }): Promise<boolean> {
       this.error = ''
       try {
-        await invoke('create_client', { client: payload })
-        this.message = 'Cliente cadastrado.'
+        await invoke('create_seller', { seller: payload })
+        this.message = 'Vendedor cadastrado.'
         await this.load()
         return true
       } catch (cause) {

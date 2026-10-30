@@ -14,6 +14,7 @@ pub struct CashStatus {
     pub expected_cash: i64,
     pub pix_total: i64,
     pub card_total: i64,
+    pub operator: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -42,7 +43,11 @@ fn validate_payment_method(method: &str) -> Result<(), String> {
     }
 }
 
-pub(crate) fn open_session(conn: &Connection, opening_amount: i64) -> Result<i64, String> {
+pub(crate) fn open_session(
+    conn: &Connection,
+    opening_amount: i64,
+    operator: Option<String>,
+) -> Result<i64, String> {
     if opening_amount < 0 {
         return Err("O valor de abertura não pode ser negativo".to_string());
     }
@@ -65,8 +70,8 @@ pub(crate) fn open_session(conn: &Connection, opening_amount: i64) -> Result<i64
 
     transaction
         .execute(
-            "INSERT INTO cash_sessions (opening_amount, status) VALUES (?1, 'open')",
-            [opening_amount],
+            "INSERT INTO cash_sessions (operator, opening_amount, status) VALUES (?1, ?2, 'open')",
+            params![operator.unwrap_or_else(|| "Operador".to_string()), opening_amount],
         )
         .map_err(|error| error.to_string())?;
     let session_id = transaction.last_insert_rowid();
@@ -331,24 +336,28 @@ fn receive_payment(
 }
 
 #[command]
-pub fn open_cash_session(opening_amount: i64, state: State<AppState>) -> Result<i64, AppError> {
+pub fn open_cash_session(
+    opening_amount: i64,
+    operator: Option<String>,
+    state: State<AppState>,
+) -> Result<i64, AppError> {
     let conn = state.conn.lock().map_err(|error| error.to_string())?;
-    Ok(open_session(&conn, opening_amount)?)
+    Ok(open_session(&conn, opening_amount, operator)?)
 }
 
 #[command]
 pub fn get_cash_status(state: State<AppState>) -> Result<CashStatus, AppError> {
     let conn = state.conn.lock().map_err(|error| error.to_string())?;
-    let session: Option<(i64, String, i64)> = conn
+    let session: Option<(i64, String, i64, Option<String>)> = conn
         .query_row(
-            "SELECT id, opened_at, opening_amount FROM cash_sessions WHERE status = 'open' LIMIT 1",
+            "SELECT id, opened_at, opening_amount, operator FROM cash_sessions WHERE status = 'open' LIMIT 1",
             [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()
         .map_err(|error| error.to_string())?;
 
-    let Some((session_id, opened_at, opening_amount)) = session else {
+    let Some((session_id, opened_at, opening_amount, operator)) = session else {
         return Ok(CashStatus {
             is_open: false,
             session_id: None,
@@ -357,6 +366,7 @@ pub fn get_cash_status(state: State<AppState>) -> Result<CashStatus, AppError> {
             expected_cash: 0,
             pix_total: 0,
             card_total: 0,
+            operator: "Operador".to_string(),
         });
     };
 
@@ -386,6 +396,7 @@ pub fn get_cash_status(state: State<AppState>) -> Result<CashStatus, AppError> {
         expected_cash,
         pix_total,
         card_total,
+        operator: operator.unwrap_or_else(|| "Operador".to_string()),
     })
 }
 
@@ -528,7 +539,7 @@ mod tests {
     #[test]
     fn recebimentos_parciais_atualizam_saldo_e_caixa_sem_exceder_a_divida() {
         let conn = prepared_db();
-        open_session(&conn, 5000).expect("caixa aberto");
+        open_session(&conn, 5000, None).expect("caixa aberto");
 
         let remaining =
             receive_payment(&conn, 1, None, 4000, "dinheiro").expect("primeiro recebimento");
@@ -558,7 +569,7 @@ mod tests {
     #[test]
     fn fechamento_compara_saldo_fisico_com_movimentos_em_dinheiro() {
         let conn = prepared_db();
-        open_session(&conn, 10000).expect("caixa aberto");
+        open_session(&conn, 10000, None).expect("caixa aberto");
         record_manual_movement(&conn, "entrada", 2500, "dinheiro", "Suprimento")
             .expect("entrada registrada");
         record_manual_movement(&conn, "saida", 500, "dinheiro", "Despesa")
@@ -573,7 +584,7 @@ mod tests {
     #[test]
     fn pagamentos_por_parcela_quitam_venda_e_classificam_cartao_no_caixa() {
         let conn = prepared_db();
-        open_session(&conn, 1000).expect("caixa aberto");
+        open_session(&conn, 1000, None).expect("caixa aberto");
         conn.execute(
             "INSERT INTO sale_installments (sale_id, installment_number, amount, due_date)
              VALUES (1, 1, 5000, '2026-12-01'), (1, 2, 5000, '2027-01-01')",
@@ -645,7 +656,7 @@ mod tests {
     #[test]
     fn recebimentos_parciais_sao_aplicados_a_parcela_e_quitam_a_venda_ao_final() {
         let conn = prepared_db();
-        open_session(&conn, 1000).expect("caixa aberto");
+        open_session(&conn, 1000, None).expect("caixa aberto");
         conn.execute(
             "INSERT INTO sale_installments (sale_id, installment_number, amount, due_date)
              VALUES (1, 1, 5000, '2026-12-01'), (1, 2, 5000, '2027-01-01')",

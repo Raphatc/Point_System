@@ -307,6 +307,7 @@ function handleFinalizeSurcharge(value) {
 
 function handleFinalizeClientId(id) {
   sale.value.clientId = id
+  clientSearch.value = ''
 }
 
 function handleFinalizeDueDate(date) {
@@ -395,11 +396,7 @@ onBeforeUnmount(() => {
           <ul v-if="filteredClients.length" class="product-results client-results">
             <li v-for="client in filteredClients" :key="client.id">
               <strong>{{ client.name }}</strong>
-              <button
-                class="link-button"
-                type="button"
-                @click="handleFinalizeClientId(client.id); clientSearch = ''"
-              >
+              <button class="link-button" type="button" @click="handleFinalizeClientId(client.id)">
                 Selecionar
               </button>
             </li>

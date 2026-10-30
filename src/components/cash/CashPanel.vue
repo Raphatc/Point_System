@@ -12,13 +12,14 @@ const { status, openingAmount, countedAmount, movement, closing, error, message,
   storeToRefs(cashStore)
 const openCashOpen = ref(false)
 const quickCloseOpen = ref(false)
+const operator = ref('Operador')
 
 async function refresh() {
   await cashStore.refresh()
 }
 
 function openCash() {
-  return cashStore.openCash().then(() => {
+  return cashStore.openCash(operator.value).then(() => {
     openCashOpen.value = false
   })
 }
@@ -122,6 +123,7 @@ onMounted(refresh)
     <OpenCashDialog
       :open="openCashOpen"
       :openingAmount="openingAmount"
+      :operator="operator"
       :busy="busy"
       @open="openCash"
       @cancel="openCashOpen = false"

@@ -8,9 +8,10 @@ build = "build.rs"
 tauri = { version = "2.0.0", features = ["rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "backup"] }
 chrono = { version = "0.4", features = ["clock"] }
 tracing = "0.1"
+tauri-plugin-updater = { version = "2.0.0" }
 
 [build-dependencies]
 tauri-build = { version = "2.0.0", features = [] }

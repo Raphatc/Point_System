@@ -3,7 +3,8 @@ mod domain;
 mod infrastructure;
 mod presentation;
 
-use tauri::{Builder, generate_handler};
+use tauri::{Builder, Manager, generate_handler};
+use tauri::path::BaseDirectory;
 
 use crate::application::{
     clients::{create_client, list_clients},
@@ -17,18 +18,29 @@ use crate::application::{
 };
 use crate::infrastructure::db::{AppState, connect, initialize_db};
 use crate::presentation::commands::{
-    create_product, get_dashboard_data, get_monthly_revenue, list_expiring_products, list_products,
+    create_backup, create_product, get_dashboard_data, get_monthly_revenue, list_backups,
+    list_expiring_products, list_products, restore_backup,
 };
 
 fn main() {
     tracing::info!("Iniciando o Sistema Distribuidora");
-    let conn = connect().expect("Não foi possível abrir o banco SQLite");
-    tracing::info!("Banco SQLite aberto com sucesso");
-    initialize_db(&conn).expect("Não foi possível inicializar as tabelas do banco");
-    tracing::info!("Inicialização do banco concluída");
-
     Builder::default()
-        .manage(AppState::new(conn))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            let db_path = app
+                .path()
+                .resolve("distribuidora.db", BaseDirectory::AppLocalData)
+                .expect("Não foi possível resolver o caminho do banco SQLite");
+            if let Some(parent) = db_path.parent() {
+                std::fs::create_dir_all(parent).expect("Não foi possível criar o diretório do banco SQLite");
+            }
+            let conn = connect(&db_path).expect("Não foi possível abrir o banco SQLite");
+            tracing::info!("Banco SQLite aberto em {}", db_path.display());
+            initialize_db(&conn).expect("Não foi possível inicializar as tabelas do banco");
+            tracing::info!("Inicialização do banco concluída");
+            app.manage(AppState::new(conn));
+            Ok(())
+        })
         .invoke_handler(generate_handler![
             get_dashboard_data,
             list_products,
@@ -37,6 +49,9 @@ fn main() {
             create_product,
             add_stock,
             create_sale,
+            create_backup,
+            list_backups,
+            restore_backup,
             create_seller,
             list_sellers,
             open_cash_session,

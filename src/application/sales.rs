@@ -390,7 +390,7 @@ mod tests {
             [product_id],
         )
         .expect("lote criado");
-        open_session(&conn, 1000).expect("caixa aberto");
+        open_session(&conn, 1000, None).expect("caixa aberto");
         conn.execute("INSERT INTO sellers (name) VALUES ('Vendedor 1')", [])
             .expect("vendedor criado");
         let seller_id = conn.last_insert_rowid();
@@ -531,7 +531,7 @@ mod tests {
             [product_id],
         )
         .expect("lote criado");
-        open_session(&conn, 0).expect("caixa aberto");
+        open_session(&conn, 0, None).expect("caixa aberto");
         conn.execute("INSERT INTO sellers (name) VALUES ('Vendedor misto')", [])
             .expect("vendedor criado");
         let seller_id = conn.last_insert_rowid();
